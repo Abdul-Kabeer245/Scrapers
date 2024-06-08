@@ -92,7 +92,6 @@ def info(soup):
     organization = []
     location = []
     link = []
-
     # Extract job title information
     h2 = soup.find_all("a", class_="jcs-JobTitle css-jspxzf eu4oa1w0")
     if h2:
@@ -118,7 +117,8 @@ def info(soup):
                 for span in spans:
                     if span.text and not span.text.isnumeric() and span.text != '':
                         organization.append(span.text.strip())
-    
+        
+
     # Extract location information
     location_div = soup.find_all('div', class_ = "css-1p0sjhy eu4oa1w0")
     if location_div:
@@ -132,14 +132,9 @@ if __name__ == "__main__":
     keyword = input("Enter keyword: ")
     num_pages = int(input("Enter number of pages: "))
     driver = driverIntialization()
-    titles, organizatons, locations, links =  scrape(driver, keyword, num_pages)
-
-    pd.set_option('display.max_colwidth', None)
-    # pd.set_option('display.max_rows', None)
-    pd.set_option('display.max_columns', None)
-
+    titles, organizatons, locations, links,  =  scrape(driver, keyword, num_pages)
     all_info_df = pd.DataFrame({"Title": titles,
         "Organization": organizatons,
         "Location": locations,
-        "Extracted Links": links} )
+        "Job Link": links} )
     all_info_df.to_csv('Indeed Job Postings.csv', index=False)
