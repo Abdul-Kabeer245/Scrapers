@@ -1,16 +1,18 @@
 """
-This Python program scrapes job postings from Indeed.com based on a user-specified keyword and number of pages. It then saves the extracted data (titles, organizations, locations, and links) into a CSV file named "Indeed Job Postings.csv".
+This Python program scrapes job postings from Indeed.com based on a user-specified keyword and number of pages. It then saves the extracted data (titles, organizations, locations, salary, description and links) into a CSV file named "Indeed Job Postings.csv".
 """
 
 # importing important libraries
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
 import time
 import pandas as pd
+import random
+
+#This function generates a random delay between 1 and 10 seconds
+def random_delay():
+    time.sleep(random.randint(1, 10))
 
 
 # Function to initialize the Chrome driver with disabled cache
@@ -19,61 +21,21 @@ def driverIntialization():
     options = webdriver.ChromeOptions()
     # Disable the cache to ensure fresh data on each run
     options.add_argument("--disable-cache")
+    options.add_argument("--start-maximized")
     # Create a new Chrome driver instance with the specified options
     driver = webdriver.Chrome(options=options)
     # Return the initialized driver
     return driver
 
 
-# Function to scrape job postings from Indeed
-def scrape(driver,keyword, numpages):
-    # Initialize lists to store job information
-    title = []
-    organization = []
-    location = []
-    link=[]
-
-    # Initialize the URL for Indeed
-    url = 'https://www.indeed.com'
-    # Navigate to the Indeed homepage
-    driver.get(url)
-    # Identify the search box by its ID
-    search_box = driver.find_element(By.ID, 'text-input-what')
-    # Enter the keyword and submit the form
-    search_box.send_keys(keyword + Keys.RETURN)
-    # Loop through each page
-    for i in range(1, numpages+1):
-        # Get the page source (html)
-        source = driver.page_source
-        # Create a BeautifulSoup object to parse the HTML
-        soup = BeautifulSoup(source, 'html.parser')
-        # Extract job information from the page by calling info function
-        page_titles, page_organizations, page_locations, page_link = info(soup)
-        # Extend the lists with the extracted information
-        title.extend(page_titles)
-        organization.extend(page_organizations)
-        location.extend(page_locations)
-        link.extend(page_link)
-        # Click the next page button if it exists
-        if not click_next_page(driver):
-            time.sleep(100)
-            break
-
-    # Quit the driver
-    driver.quit()
-    # Return the extracted job information
-    return title,organization, location, link
-
-
 # Function to click the next page button
 def click_next_page(driver):
     # Look for and click the close button if present
     try:
-        time.sleep(5)
+        random_delay()
         # Look for and click the close button if present
-        button = driver.find_element(By.CSS_SELECTOR, "button.css-yi9ndv.e8ju0x51")
-        button.click()
-        time.sleep(2)  # Allow time for the close action to complete
+        button = driver.find_element(By.CSS_SELECTOR, "button.css-yi9ndv.e8ju0x51").click()
+        random_delay()
     except:
         pass  # If the close button is not found, continue to the next page
 
@@ -81,60 +43,106 @@ def click_next_page(driver):
         wait = 5
         # Look for and click the next button
         next_button = driver.find_element(By.XPATH, '//a[@data-testid="pagination-page-next"]').click()
-        time.sleep(5)  # Ensure the page loads completely before proceeding
+        random_delay()
         return True
     except:
         return False
+    
 
-def info(soup):
-    # Initialize lists to store job information
-    title = []
-    organization = []
-    location = []
-    link = []
-    # Extract job title information
-    h2 = soup.find_all("a", class_="jcs-JobTitle css-jspxzf eu4oa1w0")
-    if h2:
-        for t in h2:
-            spans = t.find("span")
-            if spans:
-                for span in spans:
-                    title.append(span.text.strip())
+# Function to get the jobs links
+def get_links(keyword, num_links):
+    LINKS = set()
+    driver = driverIntialization()
+    url = 'https://www.indeed.com'
+    driver.get(url)
+    # Identify the search box by its ID
+    search_box = driver.find_element(By.ID, 'text-input-what')
+    random_delay()
+    # Enter the keyword and submit the form
+    search_box.send_keys(keyword + Keys.RETURN)
+    random_delay()
+    while len(LINKS) < num_links:
+        links = driver.find_elements(By.CLASS_NAME, 'jcs-JobTitle')
+        for link in links:
+            LINKS.add(link.get_attribute('href'))
+        if not click_next_page(driver):
+            random_delay()
+            break
+    driver.quit()
+    return  list(LINKS)[:num_links]
 
-    # Extract job title link     
-    if h2:
-        for a in h2:
-            links = a.get('href')
-            links = "https://pk.indeed.com" +links
-            link.append(links)
 
-    # Extract organization information
-    organization_div = soup.find_all('div', class_ = 'css-1qv0295 e37uo190')
-    if organization_div:
-        for org in organization_div:
-            spans = org.find("span")
-            if spans:
-                for span in spans:
-                    if span.text and not span.text.isnumeric() and span.text != '':
-                        organization.append(span.text.strip())
-        
+def get_data(link):
+    driver = driverIntialization()
+    driver.get(link)
+    random_delay()
 
-    # Extract location information
-    location_div = soup.find_all('div', class_ = "css-1p0sjhy eu4oa1w0")
-    if location_div:
-       for loc in location_div:
-            location.append(loc.text.strip())
+    # Initialize variables with default values
+    title = 'N/A'
+    organization_name = 'N/A'
+    location = 'N/A'
+    salary = 'N/A'
+    job_type = 'N/A'
+    job_desc = 'N/A'
 
-    # Return extracted data
-    return title, organization, location, link
+    try:
+        title_elem = driver.find_element(By.CLASS_NAME, 'jobsearch-JobInfoHeader-title')
+        title = title_elem.text.strip()
+    except:
+        pass
+
+    try:
+        org_name_elem = driver.find_element(By.CSS_SELECTOR, '[data-testid="inlineHeader-companyName"]')
+        organization_name = org_name_elem.text.strip()
+    except:
+        pass
+
+    try:
+        location_elem = driver.find_element(By.CSS_SELECTOR, '[data-testid="inlineHeader-companyLocation"]')
+        location = location_elem.text.strip()
+    except:
+        pass
+
+    try:
+        salary_elem = driver.find_element(By.ID, 'salaryInfoAndJobType')
+        salary = salary_elem.text.strip()
+    except:
+        pass
+
+    try:
+        job_type_elem = driver.find_element(By.CSS_SELECTOR, '[data-testid="Full-time-tile"]')
+        job_type = job_type_elem.text.strip()
+    except:
+        pass
+
+    try:
+        job_desc_elem = driver.find_element(By.XPATH, '//*[@id="jobDescriptionText"]')
+        job_desc = job_desc_elem.text.strip()
+    except:
+        pass
+
+    return title, organization_name, location, salary, job_type, job_desc
+
+
+
 
 if __name__ == "__main__":
     keyword = input("Enter keyword: ")
-    num_pages = int(input("Enter number of pages: "))
-    driver = driverIntialization()
-    titles, organizatons, locations, links,  =  scrape(driver, keyword, num_pages)
-    all_info_df = pd.DataFrame({"Title": titles,
-        "Organization": organizatons,
-        "Location": locations,
-        "Job Link": links} )
-    all_info_df.to_csv('Indeed Job Postings.csv', index=False)
+    num_links = int(input("Enter number of links: "))
+    df = pd.DataFrame(columns=['Title','Organzation name','Location','Pay','Job type','Job description','Link'])
+    df.to_csv('Indeed job data.csv', index=False)
+    links = get_links(keyword, num_links)
+    for link in links:
+        random_delay()
+        title, org_name, location, salary, job_type, job_desc = get_data(link)
+        JOB_DATA = {
+            'Title': title,
+            'Organzation name': org_name,
+            'Location': location,
+            'Pay': salary,
+            'Job type': job_type,
+            'Job description': job_desc,
+            'Link': link
+        }
+        df = pd.DataFrame(JOB_DATA, index=[1])
+        df.to_csv('Indeed job data.csv', index=False, header= False, mode='a')

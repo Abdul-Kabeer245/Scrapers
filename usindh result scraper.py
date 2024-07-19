@@ -62,8 +62,8 @@ def info_to_df(list, gpa):
 
 all_data = pd.DataFrame()
 
-roll_no_prefix = '2k20/swe/'
-for i in range(1, 130):
+roll_no_prefix = '2k20/CHE/'
+for i in range(1, 150):
     roll_no = roll_no_prefix + str(i)
     html = search(roll_no)
     if html != 'No data found':
